@@ -1,24 +1,30 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>FastAPI Todo CRUD</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <title>FastAPI App</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Todo App</h1>
-    <p class="subtitle">FastAPI + JavaScript CRUD Project</p>
+    <div class="container">
+        <div class="card center-card">
+            <h1>FastAPI User System</h1>
+            <p class="subtitle">Login to manage your personal todos.</p>
 
-    <div class="input-row">
-      <input id="messageInput" placeholder="请输入 Todo">
-      <button id="sendBtn">添加</button>
+            <button id="enterLoginBtn">Login</button>
+        </div>
     </div>
 
-    <h2>Todo 列表</h2>
-    <div id="replyText"></div>
-  </div>
+    <script>
+        const token = localStorage.getItem("token");
 
-  <script src="app.js"></script>
+        if (token) {
+            window.location.href = "dashboard.html";
+        }
+
+        document.getElementById("enterLoginBtn").addEventListener("click", () => {
+            window.location.href = "login.html";
+        });
+    </script>
 </body>
 </html>

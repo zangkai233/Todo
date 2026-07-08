@@ -1,8 +1,17 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+
+from database import engine, get_db
+from models import Base, User
+from schemas import UserRegister, UserLogin, UserResponse
+from auth import hash_password, verify_password, create_access_token, decode_access_token
+
 
 app = FastAPI()
+
+security = HTTPBearer()
 
 origins = [
     "http://127.0.0.1:5500",
@@ -17,83 +26,99 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class TodoCreate(BaseModel):
-    title: str
-
-
-class TodoUpdate(BaseModel):
-    title: str
-    completed: bool
-
-
-todos = []
-next_id = 1
+Base.metadata.create_all(bind=engine)
 
 
 @app.get("/")
 def home():
-    return {"message": "FastAPI Todo API is running"}
+    return {"message": "FastAPI database backend is running"}
 
 
-# 查：获取所有 Todo
-@app.get("/todos")
-def get_todos():
-    return {
-        "todos": todos
-    }
+@app.post("/register", response_model=UserResponse)
+def register(user: UserRegister, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.email == user.email).first()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    new_user = User(
+        username=user.username,
+        email=user.email,
+        password_hash=hash_password(user.password)
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
 
 
-# 增：创建 Todo
-@app.post("/todos")
-def create_todo(todo: TodoCreate):
-    global next_id
+@app.post("/login")
+def login(user: UserLogin, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
 
-    new_todo = {
-        "id": next_id,
-        "title": todo.title,
-        "completed": False
-    }
+    if not db_user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    todos.append(new_todo)
-    next_id += 1
+    if not verify_password(user.password, db_user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    return {
-        "message": "Todo created",
-        "todo": new_todo
-    }
-
-
-# 改：修改 Todo
-@app.put("/todos/{todo_id}")
-def update_todo(todo_id: int, todo: TodoUpdate):
-    for item in todos:
-        if item["id"] == todo_id:
-            item["title"] = todo.title
-            item["completed"] = todo.completed
-
-            return {
-                "message": "Todo updated",
-                "todo": item
-            }
+    access_token = create_access_token(
+        data={
+            "sub": str(db_user.id),
+            "email": db_user.email
+        }
+    )
 
     return {
-        "error": "Todo not found"
+        "message": "Login successful",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": db_user.id,
+            "username": db_user.username,
+            "email": db_user.email
+        }
     }
 
 
-# 删：删除 Todo
-@app.delete("/todos/{todo_id}")
-def delete_todo(todo_id: int):
-    for item in todos:
-        if item["id"] == todo_id:
-            todos.remove(item)
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 
-            return {
-                "message": "Todo deleted",
-                "todo": item
-            }
+    db: Session = Depends(get_db)
 
-    return {
-        "error": "Todo not found"
-    }
+):
+
+    token = credentials.credentials
+
+    payload = decode_access_token(token)
+
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
+
+    user_id = payload.get("sub")
+
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload"
+        )
+
+    db_user = db.query(User).filter(User.id == int(user_id)).first()
+
+    if db_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+
+    return db_user
+
+
+@app.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
