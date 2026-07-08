@@ -4,8 +4,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from database import engine, get_db
-from models import Base, User
-from schemas import UserRegister, UserLogin, UserResponse
+from models import Base, Todo, User
+from schemas import TodoCreate, TodoResponse, TodoUpdate, UserRegister, UserLogin, UserResponse
 from auth import hash_password, verify_password, create_access_token, decode_access_token
 
 
@@ -122,3 +122,81 @@ def get_current_user(
 @app.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@app.get("/todos", response_model=list[TodoResponse])
+def get_todos(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(Todo).filter(Todo.owner_id == current_user.id).order_by(Todo.id.desc()).all()
+
+
+@app.post("/todos", response_model=TodoResponse, status_code=status.HTTP_201_CREATED)
+def create_todo(
+    todo: TodoCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    title = todo.title.strip()
+
+    if not title:
+        raise HTTPException(status_code=400, detail="Todo title is required")
+
+    new_todo = Todo(title=title, owner_id=current_user.id)
+
+    db.add(new_todo)
+    db.commit()
+    db.refresh(new_todo)
+
+    return new_todo
+
+
+@app.put("/todos/{todo_id}", response_model=TodoResponse)
+def update_todo(
+    todo_id: int,
+    todo_update: TodoUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_todo = db.query(Todo).filter(
+        Todo.id == todo_id,
+        Todo.owner_id == current_user.id
+    ).first()
+
+    if db_todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+
+    if todo_update.title is not None:
+        title = todo_update.title.strip()
+
+        if not title:
+            raise HTTPException(status_code=400, detail="Todo title is required")
+
+        db_todo.title = title
+
+    if todo_update.completed is not None:
+        db_todo.completed = todo_update.completed
+
+    db.commit()
+    db.refresh(db_todo)
+
+    return db_todo
+
+
+@app.delete("/todos/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_todo(
+    todo_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_todo = db.query(Todo).filter(
+        Todo.id == todo_id,
+        Todo.owner_id == current_user.id
+    ).first()
+
+    if db_todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+
+    db.delete(db_todo)
+    db.commit()

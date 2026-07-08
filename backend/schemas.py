@@ -19,3 +19,22 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TodoCreate(BaseModel):
+    title: str
+
+
+class TodoUpdate(BaseModel):
+    title: str | None = None
+    completed: bool | None = None
+
+
+class TodoResponse(BaseModel):
+    id: int
+    title: str
+    completed: bool
+    owner_id: int
+
+    class Config:
+        from_attributes = True

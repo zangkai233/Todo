@@ -6,21 +6,55 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <h1>Dashboard</h1>
-
-            <p id="welcomeText">Loading user info...</p>
-
-            <div class="user-info">
-                <p><strong>User ID:</strong> <span id="userId"></span></p>
-                <p><strong>Username:</strong> <span id="username"></span></p>
-                <p><strong>Email:</strong> <span id="email"></span></p>
+    <main class="dashboard-container">
+        <header class="dashboard-header">
+            <div>
+                <h1>Dashboard</h1>
+                <p id="welcomeText" class="muted-text">Loading user info...</p>
             </div>
 
-            <button id="logoutBtn">Logout</button>
+            <button id="logoutBtn" class="secondary-button">Logout</button>
+        </header>
+
+        <div class="dashboard-grid">
+            <section class="card user-card">
+                <div class="section-header">
+                    <h2>Account</h2>
+                </div>
+
+                <dl class="user-info">
+                    <div>
+                        <dt>User ID</dt>
+                        <dd id="userId"></dd>
+                    </div>
+                    <div>
+                        <dt>Username</dt>
+                        <dd id="username"></dd>
+                    </div>
+                    <div>
+                        <dt>Email</dt>
+                        <dd id="email"></dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section class="card todo-card">
+                <div class="section-header">
+                    <h2>My Todos</h2>
+                    <span id="todoSummary" class="todo-summary">0 open / 0 done</span>
+                </div>
+
+                <form id="todoForm" class="todo-form">
+                    <input id="todoInput" type="text" placeholder="Add a new todo" autocomplete="off">
+                    <button type="submit">Add</button>
+                </form>
+
+                <p id="todoMessage"></p>
+
+                <ul id="todoList" class="todo-list"></ul>
+            </section>
         </div>
-    </div>
+    </main>
 
     <script src="dashboard.js"></script>
 </body>

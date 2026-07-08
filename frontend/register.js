@@ -28,11 +28,11 @@ registerBtn.addEventListener("click", async () => {
             return;
         }
 
-        resultText.textContent = "Registered successfully. Redirecting to login...";
+        resultText.textContent = "Registered successfully! Redirecting to login...";
 
         setTimeout(() => {
             window.location.href = "login.html";
-        }, 1000);
+        }, 2000);
 
     } catch (error) {
         resultText.textContent = "Network error";
