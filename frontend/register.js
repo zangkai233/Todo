@@ -35,7 +35,7 @@ registerBtn.addEventListener("click", async () => {
         }, 2000);
 
     } catch (error) {
-        resultText.textContent = "Network error";
+        resultText.textContent = "Network error!";
         console.error(error);
     }
 });
