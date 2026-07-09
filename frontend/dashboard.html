@@ -2,14 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todos</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="dashboard-page">
     <main class="dashboard-container">
         <header class="dashboard-header">
             <div>
-                <h1>Dashboard</h1>
+                <p class="eyebrow">Personal tasks</p>
+                <h1>Todos</h1>
                 <p id="welcomeText" class="muted-text">Loading user info...</p>
             </div>
 
@@ -17,37 +19,90 @@
         </header>
 
         <div class="dashboard-grid">
-            <section class="card user-card">
+            <aside class="side-column">
+                <section class="profile-panel">
+                    <div class="section-header">
+                        <h2>Account</h2>
+                    </div>
+
+                    <dl class="user-info">
+                        <div>
+                            <dt>User ID</dt>
+                            <dd id="userId"></dd>
+                        </div>
+                        <div>
+                            <dt>Username</dt>
+                            <dd id="username"></dd>
+                        </div>
+                        <div>
+                            <dt>Email</dt>
+                            <dd id="email"></dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section class="stats-panel">
+                    <div>
+                        <span class="stat-label">Open</span>
+                        <strong id="openCount">0</strong>
+                    </div>
+                    <div>
+                        <span class="stat-label">Done</span>
+                        <strong id="doneCount">0</strong>
+                    </div>
+                    <div>
+                        <span class="stat-label">Due soon</span>
+                        <strong id="dueSoonCount">0</strong>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="todo-panel">
                 <div class="section-header">
-                    <h2>Account</h2>
+                    <div>
+                        <h2>Tasks</h2>
+                        <p id="activeFilterText" class="muted-text">All tasks</p>
+                    </div>
+                    <span id="todoSummary" class="todo-summary">0 shown</span>
                 </div>
 
-                <dl class="user-info">
-                    <div>
-                        <dt>User ID</dt>
-                        <dd id="userId"></dd>
+                <form id="todoForm" class="todo-form" aria-label="Add todo">
+                    <input id="todoInput" type="text" placeholder="Add a new todo" autocomplete="off" maxlength="200">
+                    <div class="todo-form-row">
+                        <input id="categoryInput" type="text" placeholder="Category" autocomplete="off" maxlength="60">
+                        <input id="tagsInput" type="text" placeholder="Tags: work, urgent" autocomplete="off" maxlength="300">
+                        <input id="dueDateInput" type="date">
+                        <button type="submit" class="primary-button">
+                            <span aria-hidden="true">+</span>
+                            <span>Add</span>
+                        </button>
                     </div>
-                    <div>
-                        <dt>Username</dt>
-                        <dd id="username"></dd>
-                    </div>
-                    <div>
-                        <dt>Email</dt>
-                        <dd id="email"></dd>
-                    </div>
-                </dl>
-            </section>
-
-            <section class="card todo-card">
-                <div class="section-header">
-                    <h2>My Todos</h2>
-                    <span id="todoSummary" class="todo-summary">0 open / 0 done</span>
-                </div>
-
-                <form id="todoForm" class="todo-form">
-                    <input id="todoInput" type="text" placeholder="Add a new todo" autocomplete="off">
-                    <button type="submit">Add</button>
                 </form>
+
+                <div class="task-toolbar" aria-label="Todo filters">
+                    <input id="searchInput" type="search" placeholder="Search title, category, tags" autocomplete="off">
+                    <div class="filter-row">
+                        <select id="statusFilter" aria-label="Status filter">
+                            <option value="all">All status</option>
+                            <option value="open">Open</option>
+                            <option value="done">Done</option>
+                        </select>
+                        <select id="categoryFilter" aria-label="Category filter">
+                            <option value="all">All categories</option>
+                        </select>
+                        <select id="tagFilter" aria-label="Tag filter">
+                            <option value="all">All tags</option>
+                        </select>
+                        <select id="dueFilter" aria-label="Due date filter">
+                            <option value="all">Any date</option>
+                            <option value="overdue">Overdue</option>
+                            <option value="today">Today</option>
+                            <option value="week">Next 7 days</option>
+                            <option value="no-date">No date</option>
+                        </select>
+                        <button id="clearFiltersBtn" type="button" class="quiet-button">Clear</button>
+                    </div>
+                </div>
 
                 <p id="todoMessage"></p>
 

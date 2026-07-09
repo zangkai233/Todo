@@ -9,11 +9,25 @@ const emailText = document.getElementById("email");
 const logoutBtn = document.getElementById("logoutBtn");
 const todoForm = document.getElementById("todoForm");
 const todoInput = document.getElementById("todoInput");
+const categoryInput = document.getElementById("categoryInput");
+const tagsInput = document.getElementById("tagsInput");
+const dueDateInput = document.getElementById("dueDateInput");
+const searchInput = document.getElementById("searchInput");
+const statusFilter = document.getElementById("statusFilter");
+const categoryFilter = document.getElementById("categoryFilter");
+const tagFilter = document.getElementById("tagFilter");
+const dueFilter = document.getElementById("dueFilter");
+const clearFiltersBtn = document.getElementById("clearFiltersBtn");
 const todoMessage = document.getElementById("todoMessage");
 const todoList = document.getElementById("todoList");
 const todoSummary = document.getElementById("todoSummary");
+const activeFilterText = document.getElementById("activeFilterText");
+const openCount = document.getElementById("openCount");
+const doneCount = document.getElementById("doneCount");
+const dueSoonCount = document.getElementById("dueSoonCount");
 
-// 如果没有 token，说明没登录，直接赶回首页
+let allTodos = [];
+
 if (!token) {
     window.location.href = "index.html";
 }
@@ -30,14 +44,13 @@ async function loadCurrentUser() {
         const data = await response.json();
 
         if (!response.ok) {
-            // token 错了或者过期了
             localStorage.removeItem("token");
             localStorage.removeItem("username");
             window.location.href = "index.html";
             return;
         }
 
-        welcomeText.textContent = `Welcome back, ${data.username}!`;
+        welcomeText.textContent = `Welcome back, ${data.username}.`;
         userIdText.textContent = data.id;
         usernameText.textContent = data.username;
         emailText.textContent = data.email;
@@ -73,54 +86,356 @@ function setTodoMessage(message, isError = false) {
     todoMessage.className = isError ? "error-text" : "";
 }
 
-function renderTodos(todos) {
+function splitTags(tags) {
+    if (!tags) {
+        return [];
+    }
+
+    return tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+}
+
+function normalizeTags(tags) {
+    const seenTags = new Set();
+    const cleanTags = [];
+
+    splitTags(tags).forEach((tag) => {
+        const tagKey = tag.toLowerCase();
+
+        if (!seenTags.has(tagKey)) {
+            seenTags.add(tagKey);
+            cleanTags.push(tag);
+        }
+    });
+
+    return cleanTags.join(", ");
+}
+
+function normalizeTodo(todo) {
+    return {
+        ...todo,
+        category: todo.category || "",
+        tags: todo.tags || "",
+        due_date: todo.due_date || null
+    };
+}
+
+function parseDate(value) {
+    if (!value) {
+        return null;
+    }
+
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
+}
+
+function startOfToday() {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+}
+
+function daysFromToday(value) {
+    const dueDate = parseDate(value);
+
+    if (!dueDate) {
+        return null;
+    }
+
+    const diff = dueDate.getTime() - startOfToday().getTime();
+    return Math.round(diff / 86400000);
+}
+
+function getDueState(todo) {
+    const days = daysFromToday(todo.due_date);
+
+    if (days === null) {
+        return "none";
+    }
+
+    if (!todo.completed && days < 0) {
+        return "overdue";
+    }
+
+    if (days === 0) {
+        return "today";
+    }
+
+    if (!todo.completed && days <= 7) {
+        return "soon";
+    }
+
+    return "scheduled";
+}
+
+function formatDueDate(todo) {
+    const dueDate = parseDate(todo.due_date);
+
+    if (!dueDate) {
+        return "No date";
+    }
+
+    const state = getDueState(todo);
+    const formattedDate = new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric"
+    }).format(dueDate);
+
+    if (state === "overdue") {
+        return `Overdue ${formattedDate}`;
+    }
+
+    if (state === "today") {
+        return "Today";
+    }
+
+    return formattedDate;
+}
+
+function updateStats() {
+    const openTodos = allTodos.filter((todo) => !todo.completed);
+    const doneTodos = allTodos.filter((todo) => todo.completed);
+    const dueSoonTodos = allTodos.filter((todo) => {
+        const state = getDueState(todo);
+        return state === "today" || state === "soon" || state === "overdue";
+    });
+
+    openCount.textContent = openTodos.length;
+    doneCount.textContent = doneTodos.length;
+    dueSoonCount.textContent = dueSoonTodos.length;
+}
+
+function buildSelectOptions(selectElement, values, defaultLabel) {
+    const currentValue = selectElement.value;
+    selectElement.innerHTML = "";
+
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "all";
+    defaultOption.textContent = defaultLabel;
+    selectElement.appendChild(defaultOption);
+
+    values.forEach((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        selectElement.appendChild(option);
+    });
+
+    if (currentValue === "all" || values.includes(currentValue)) {
+        selectElement.value = currentValue;
+    }
+}
+
+function updateFilterOptions() {
+    const categories = [...new Set(allTodos.map((todo) => todo.category).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b));
+    const tags = [...new Set(allTodos.flatMap((todo) => splitTags(todo.tags)))]
+        .sort((a, b) => a.localeCompare(b));
+
+    buildSelectOptions(categoryFilter, categories, "All categories");
+    buildSelectOptions(tagFilter, tags, "All tags");
+}
+
+function matchesDueFilter(todo, filterValue) {
+    const state = getDueState(todo);
+
+    if (filterValue === "overdue") {
+        return state === "overdue";
+    }
+
+    if (filterValue === "today") {
+        return state === "today";
+    }
+
+    if (filterValue === "week") {
+        return state === "today" || state === "soon";
+    }
+
+    if (filterValue === "no-date") {
+        return state === "none";
+    }
+
+    return true;
+}
+
+function getFilteredTodos() {
+    const searchTerm = searchInput.value.trim().toLowerCase();
+
+    return allTodos.filter((todo) => {
+        if (statusFilter.value === "open" && todo.completed) {
+            return false;
+        }
+
+        if (statusFilter.value === "done" && !todo.completed) {
+            return false;
+        }
+
+        if (categoryFilter.value !== "all" && todo.category !== categoryFilter.value) {
+            return false;
+        }
+
+        if (tagFilter.value !== "all" && !splitTags(todo.tags).includes(tagFilter.value)) {
+            return false;
+        }
+
+        if (!matchesDueFilter(todo, dueFilter.value)) {
+            return false;
+        }
+
+        if (!searchTerm) {
+            return true;
+        }
+
+        const searchableText = `${todo.title} ${todo.category} ${todo.tags}`.toLowerCase();
+        return searchableText.includes(searchTerm);
+    });
+}
+
+function updateActiveFilterText(visibleCount) {
+    const activeFilters = [];
+
+    if (searchInput.value.trim()) {
+        activeFilters.push(`Search: ${searchInput.value.trim()}`);
+    }
+
+    if (statusFilter.value !== "all") {
+        activeFilters.push(statusFilter.options[statusFilter.selectedIndex].textContent);
+    }
+
+    if (categoryFilter.value !== "all") {
+        activeFilters.push(categoryFilter.value);
+    }
+
+    if (tagFilter.value !== "all") {
+        activeFilters.push(`#${tagFilter.value}`);
+    }
+
+    if (dueFilter.value !== "all") {
+        activeFilters.push(dueFilter.options[dueFilter.selectedIndex].textContent);
+    }
+
+    activeFilterText.textContent = activeFilters.length ? activeFilters.join(" / ") : "All tasks";
+    todoSummary.textContent = `${visibleCount} shown`;
+}
+
+function createMetaInput({ value, placeholder, className, type = "text", onSave }) {
+    const input = document.createElement("input");
+    input.type = type;
+    input.value = value || "";
+    input.placeholder = placeholder;
+    input.className = className;
+
+    if (type === "date") {
+        input.addEventListener("change", () => {
+            onSave(input.value || null);
+        });
+        return input;
+    }
+
+    input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            input.blur();
+        }
+
+        if (event.key === "Escape") {
+            input.value = value || "";
+            input.blur();
+        }
+    });
+
+    input.addEventListener("blur", () => {
+        const nextValue = input.value.trim();
+
+        if (nextValue !== (value || "")) {
+            onSave(nextValue);
+        }
+    });
+
+    return input;
+}
+
+function renderTodos() {
     todoList.innerHTML = "";
 
-    const doneCount = todos.filter((todo) => todo.completed).length;
-    const openCount = todos.length - doneCount;
-    todoSummary.textContent = `${openCount} open / ${doneCount} done`;
+    const visibleTodos = getFilteredTodos();
+    updateActiveFilterText(visibleTodos.length);
 
-    if (todos.length === 0) {
+    if (visibleTodos.length === 0) {
         const emptyItem = document.createElement("li");
         emptyItem.className = "todo-empty";
-        emptyItem.textContent = "Your list is clear.";
+        emptyItem.textContent = allTodos.length === 0 ? "Your list is clear." : "No tasks match.";
         todoList.appendChild(emptyItem);
         return;
     }
 
-    todos.forEach((todo) => {
+    visibleTodos.forEach((todo) => {
         const item = document.createElement("li");
-        item.className = todo.completed ? "todo-item completed" : "todo-item";
+        const dueState = getDueState(todo);
+        item.className = `todo-item ${todo.completed ? "completed" : ""} due-${dueState}`;
 
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
+        checkbox.className = "todo-check";
         checkbox.checked = todo.completed;
         checkbox.addEventListener("change", () => {
             updateTodo(todo.id, { completed: checkbox.checked });
         });
 
-        const titleInput = document.createElement("input");
-        titleInput.type = "text";
-        titleInput.value = todo.title;
-        titleInput.className = "todo-title";
-        titleInput.addEventListener("keydown", (event) => {
-            if (event.key === "Enter") {
-                titleInput.blur();
-            }
-        });
-        titleInput.addEventListener("blur", () => {
-            const nextTitle = titleInput.value.trim();
+        const content = document.createElement("div");
+        content.className = "todo-content";
 
-            if (!nextTitle) {
-                titleInput.value = todo.title;
-                setTodoMessage("Todo title cannot be empty.", true);
-                return;
-            }
+        const titleInput = createMetaInput({
+            value: todo.title,
+            placeholder: "Todo",
+            className: "todo-title",
+            onSave: (nextTitle) => {
+                if (!nextTitle) {
+                    titleInput.value = todo.title;
+                    setTodoMessage("Todo title cannot be empty.", true);
+                    return;
+                }
 
-            if (nextTitle !== todo.title) {
                 updateTodo(todo.id, { title: nextTitle });
             }
         });
+
+        const metaEditor = document.createElement("div");
+        metaEditor.className = "todo-meta-editor";
+
+        const categoryEditor = createMetaInput({
+            value: todo.category,
+            placeholder: "Category",
+            className: "todo-meta-input",
+            onSave: (nextCategory) => updateTodo(todo.id, { category: nextCategory })
+        });
+
+        const tagsEditor = createMetaInput({
+            value: todo.tags,
+            placeholder: "Tags",
+            className: "todo-meta-input",
+            onSave: (nextTags) => updateTodo(todo.id, { tags: normalizeTags(nextTags) })
+        });
+
+        const dueEditor = createMetaInput({
+            value: todo.due_date,
+            placeholder: "Due date",
+            className: "todo-meta-input",
+            type: "date",
+            onSave: (nextDueDate) => updateTodo(todo.id, { due_date: nextDueDate })
+        });
+
+        const dueBadge = document.createElement("span");
+        dueBadge.className = `due-badge due-${dueState}`;
+        dueBadge.textContent = formatDueDate(todo);
+
+        metaEditor.appendChild(categoryEditor);
+        metaEditor.appendChild(tagsEditor);
+        metaEditor.appendChild(dueEditor);
+        metaEditor.appendChild(dueBadge);
+
+        content.appendChild(titleInput);
+        content.appendChild(metaEditor);
 
         const deleteBtn = document.createElement("button");
         deleteBtn.type = "button";
@@ -131,10 +446,16 @@ function renderTodos(todos) {
         });
 
         item.appendChild(checkbox);
-        item.appendChild(titleInput);
+        item.appendChild(content);
         item.appendChild(deleteBtn);
         todoList.appendChild(item);
     });
+}
+
+function renderDashboard() {
+    updateStats();
+    updateFilterOptions();
+    renderTodos();
 }
 
 async function loadTodos() {
@@ -152,19 +473,34 @@ async function loadTodos() {
             return;
         }
 
+        allTodos = data.map(normalizeTodo);
         setTodoMessage("");
-        renderTodos(data);
+        renderDashboard();
     } catch (error) {
         console.error(error);
         setTodoMessage("Network error while loading todos.", true);
     }
 }
 
-async function addTodo(title) {
+async function addTodo() {
+    const title = todoInput.value.trim();
+
+    if (!title) {
+        setTodoMessage("Please enter a todo.", true);
+        return;
+    }
+
+    const payload = {
+        title,
+        category: categoryInput.value.trim(),
+        tags: normalizeTags(tagsInput.value),
+        due_date: dueDateInput.value || null
+    };
+
     try {
         const response = await requestTodos("/todos", {
             method: "POST",
-            body: JSON.stringify({ title: title })
+            body: JSON.stringify(payload)
         });
 
         if (!response) {
@@ -179,6 +515,9 @@ async function addTodo(title) {
         }
 
         todoInput.value = "";
+        categoryInput.value = "";
+        tagsInput.value = "";
+        dueDateInput.value = "";
         await loadTodos();
     } catch (error) {
         console.error(error);
@@ -237,21 +576,26 @@ async function deleteTodo(todoId) {
 
 todoForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    addTodo();
+});
 
-    const title = todoInput.value.trim();
+[searchInput, statusFilter, categoryFilter, tagFilter, dueFilter].forEach((control) => {
+    control.addEventListener("input", renderTodos);
+    control.addEventListener("change", renderTodos);
+});
 
-    if (!title) {
-        setTodoMessage("Please enter a todo.", true);
-        return;
-    }
-
-    addTodo(title);
+clearFiltersBtn.addEventListener("click", () => {
+    searchInput.value = "";
+    statusFilter.value = "all";
+    categoryFilter.value = "all";
+    tagFilter.value = "all";
+    dueFilter.value = "all";
+    renderTodos();
 });
 
 logoutBtn.addEventListener("click", () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
-
     window.location.href = "login.html";
 });
 
